@@ -1,5 +1,3 @@
-import argparse
-import copy
 import pickle
 import time
 from typing import Any, Tuple, List
@@ -10,6 +8,7 @@ import torch.nn as nn
 from torch.optim import Adam
 from torch.utils.data import Subset, DataLoader
 from torchvision.transforms import Compose
+from torchvision import models
 
 from sklearn.model_selection import train_test_split
 from prettytable import PrettyTable
@@ -52,6 +51,7 @@ class pre_processing:
     classes: dict
     result_directory: str
     logger: logging
+    NUM_OF_CLASSES: int
 
     def __init__(self):
         self.data_directory = "/home/harsh.shukla/Caltech101/Data/101_ObjectCategories"
@@ -72,6 +72,7 @@ class pre_processing:
                             filemode='w')
         self.logger = logging.getLogger()
         self.logger.setLevel(logging.DEBUG)
+        self.NUM_OF_CLASSES = 101
         self.classes = {}
 
     def train_val_dataset(self, dataset):
@@ -158,8 +159,8 @@ class training(pre_processing):
 
         self.LOG_FREQUENCY = 5
 
-        self.num_epochs = 300
-        self.learning_rate = 0.00001
+        self.num_epochs = 500
+        self.learning_rate = 0.00005
 
     def count_parameters(self, model: object):
         table = PrettyTable(["Modules", "Parameters"])
@@ -173,62 +174,8 @@ class training(pre_processing):
         self.logger.info(f"{table}")
         self.logger.info(f"Total Trainable Params: {total_params}")
 
-    def train_network(self, train_loader: DataLoader, test_loader: DataLoader):
-
-        # Creating directories for results
-        self.logger.info(f"Creating results directory")
-        if not os.path.exists(self.result_directory):
-            os.makedirs(self.result_directory)
-
-        self.logger.info("Creating Dump directory for keeping track of losses")
-        dump_dir = os.path.join(self.result_directory, f"Dump")
-        if not os.path.exists(dump_dir):
-            os.makedirs(dump_dir)
-
-        self.logger.info("Creating directory for keeping plots and images")
-        image_results_dir = os.path.join(self.result_directory, f"images")
-        if not os.path.exists(image_results_dir):
-            os.makedirs(image_results_dir)
-
-        self.logger.info("Check for pre-existing Dump files")
-        if os.path.exists((os.path.join(dump_dir, "classification_train_loss.txt"))):
-            train_loss_db = open(os.path.join(dump_dir, "classification_train_loss.txt"), 'rb')
-            train_loss_dump = pickle.load(train_loss_db)
-        if os.path.exists((os.path.join(dump_dir, "classification_test_loss.txt"))):
-            train_loss_db = open(os.path.join(dump_dir, "classification_test_loss.txt"), 'rb')
-            train_loss_dump = pickle.load(train_loss_db)
-
-        # Checkpointing
-        checkpoints = os.path.join(self.result_directory, "Checkpoints")
-        if not os.path.exists(checkpoints):
-            os.makedirs(checkpoints)
-        checkpoint_file = os.path.join(checkpoints, "check.pt")
-        self.logger.info("Directories Created")
-
-        # Initialising Network
-        network = Cnet()
-        network.to(device)
-
-        start = time.time()
-
-        optimizer: Adam = torch.optim.Adam(network.parameters(), lr=self.learning_rate, betas=(0.9, 0.999), eps=1e-8)
-        loss_criteria = nn.CrossEntropyLoss()
-
-        self.logger.info(f"Initialised Network, Optimizer and Loss")
-        self.logger.info(f"Number of Parameters in Network:{self.count_parameters(network)}")
-
-        # Load checkpoints if exist
-        if os.path.exists(checkpoint_file):
-            print("Loading from Previous Checkpoint...")
-            self.logger.info("Loading from Previous Checkpoint...")
-            checkpoint = torch.load(checkpoint_file)
-            network.load_state_dict(checkpoint['model_state_dict'])
-            optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-            network.train()
-        else:
-            print("No previous checkpoints exist, initialising network from start...")
-            self.logger.info("No previous checkpoints exist, initialising network from start...")
-
+    def train_model(self, checkpoint_file: object, loss_criteria, network: object, optimizer: Adam, start,
+                    test_loader: DataLoader, train_loader: DataLoader) -> object
         num_of_passes = 0
 
         # save best config
@@ -311,9 +258,88 @@ class training(pre_processing):
                     'model_state_dict': network.state_dict(),
                     'optimizer_state_dict': optimizer.state_dict(),
                 }, checkpoint_file)
-
         self.logger.info(f"\nBest epoch: {best_epoch + 1}\n{best_val_acc:.4f} (Validation Accuracy)\n")
         self.logger.info(f"> In {(time.time() - start) / 60:.2f} minutes")
+
+        return train_losses, test_losses
+
+    def set_parameter_requires_grad(self, model, feature_extracting: bool):
+        if feature_extracting:
+            for param in model.parameters():
+                param.requires_grad = False
+
+    def initialise_model(self, model_name: str, use_pretrained=True, feature_extract=False) -> object:
+        model_ft = None
+        if model_name == "VGG":
+            model_ft = models.vgg19_bn(pretrained=use_pretrained)
+            self.set_parameter_requires_grad(model_ft, feature_extract)
+            num_ftrs = model_ft.classifier[6].in_features
+            model_ft.classifier[6] = nn.Linear(num_ftrs, self.NUM_OF_CLASSES)
+
+        if model_name == "CNet":
+            model_ft = Cnet()
+        return model_ft
+
+    def train_network(self, train_loader: DataLoader, test_loader: DataLoader):
+
+        # Creating directories for results
+        self.logger.info(f"Creating results directory")
+        if not os.path.exists(self.result_directory):
+            os.makedirs(self.result_directory)
+
+        self.logger.info("Creating Dump directory for keeping track of losses")
+        dump_dir = os.path.join(self.result_directory, f"Dump")
+        if not os.path.exists(dump_dir):
+            os.makedirs(dump_dir)
+
+        self.logger.info("Creating directory for keeping plots and images")
+        image_results_dir = os.path.join(self.result_directory, f"images")
+        if not os.path.exists(image_results_dir):
+            os.makedirs(image_results_dir)
+
+        self.logger.info("Check for pre-existing Dump files")
+        if os.path.exists((os.path.join(dump_dir, "classification_train_loss.txt"))):
+            train_loss_db = open(os.path.join(dump_dir, "classification_train_loss.txt"), 'rb')
+            train_loss_dump = pickle.load(train_loss_db)
+        if os.path.exists((os.path.join(dump_dir, "classification_test_loss.txt"))):
+            test_loss_db = open(os.path.join(dump_dir, "classification_test_loss.txt"), 'rb')
+            test_loss_dump = pickle.load(test_loss_db)
+
+        # Checkpointing
+        checkpoints = os.path.join(self.result_directory, "Checkpoints")
+        if not os.path.exists(checkpoints):
+            os.makedirs(checkpoints)
+        checkpoint_file = os.path.join(checkpoints, "check.pt")
+        self.logger.info("Directories Created")
+
+        # Initialising Network
+
+        network = self.initialise_model("VGG")
+        network.to(device)
+
+        start = time.time()
+
+        optimizer: Adam = torch.optim.Adam(network.parameters(), lr=self.learning_rate, betas=(0.9, 0.999), eps=1e-8)
+        loss_criteria = nn.CrossEntropyLoss()
+
+        self.logger.info(f"Initialised Network, Optimizer and Loss")
+        self.logger.info(f"Number of Parameters in Network:{self.count_parameters(network)}")
+
+        # Load checkpoints if exist
+#         if os.path.exists(checkpoint_file):
+#             print("Loading from Previous Checkpoint...")
+#             self.logger.info("Loading from Previous Checkpoint...")
+#             checkpoint = torch.load(checkpoint_file)
+#             network.load_state_dict(checkpoint['model_state_dict'])
+#             optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+#             network.train()
+#         else:
+#             print("No previous checkpoints exist, initialising network from start...")
+#             self.logger.info("No previous checkpoints exist, initialising network from start...")
+
+        # Train Model
+        train_losses, test_losses = self.train_model(checkpoint_file, loss_criteria, network, optimizer, start,
+                                                     test_loader, train_loader)
 
         with open(os.path.join(dump_dir, "classification_train_loss.txt"), 'wb') as f:
             pickle.dump(train_losses, f)

@@ -4,7 +4,7 @@ import torch
 
 class classification_net(nn.Module):
 
-    def __init__(self, negative_slope=0.2, dropout_percentage=0.5):
+    def __init__(self, negative_slope=0.2, dropout_percentage=0.3):
         super(classification_net, self).__init__()
 
         self.dropout = nn.Dropout(dropout_percentage, inplace=False)
@@ -26,13 +26,13 @@ class classification_net(nn.Module):
             nn.LeakyReLU(negative_slope=negative_slope, inplace=True)
         )
         self.fc1 = nn.Sequential(
-            nn.Linear(14 * 14 * 64, 1024),
+            nn.Linear(14 * 14 * 64, 512),
             nn.LeakyReLU(negative_slope=negative_slope, inplace=True)
         )
-        self.fc2 = nn.Sequential(
-            nn.Linear(1024, 512),
-            nn.LeakyReLU(negative_slope=negative_slope, inplace=True)
-        )
+#         self.fc2 = nn.Sequential(
+#             nn.Linear(1024, 512),
+#             nn.LeakyReLU(negative_slope=negative_slope, inplace=True)
+#         )
         self.fc3 = nn.Sequential(
             nn.Linear(512, 101)
         )
@@ -44,7 +44,7 @@ class classification_net(nn.Module):
         conv4 = self.conv4(conv3)
         conv4 = self.dropout(conv4)
         fc1 = self.fc1(torch.flatten(conv4, 1))
-        fc2 = self.fc2(fc1)
-        fc3 = self.fc3(fc2)
+#         fc2 = self.fc2(fc1)
+        fc3 = self.fc3(fc1)
         return fc3
 
