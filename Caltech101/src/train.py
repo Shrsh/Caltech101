@@ -175,7 +175,7 @@ class training(pre_processing):
         self.logger.info(f"Total Trainable Params: {total_params}")
 
     def train_model(self, checkpoint_file: object, loss_criteria, network: object, optimizer: Adam, start,
-                    test_loader: DataLoader, train_loader: DataLoader) -> object
+                    test_loader: DataLoader, train_loader: DataLoader) -> object:
         num_of_passes = 0
 
         # save best config
