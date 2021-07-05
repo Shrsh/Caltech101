@@ -31,7 +31,6 @@ warnings.filterwarnings("ignore", category=np.VisibleDeprecationWarning)
 #                     filemode='w')
 
 
-
 from models import classification_net as Cnet
 
 mean: List[float] = [0.5, 0.5, 0.5]
@@ -173,7 +172,7 @@ class training(pre_processing):
         self.logger.info(f"Total Trainable Params: {total_params}")
 
     def train_model(self, checkpoint_file: object, loss_criteria, network: object, optimizer: Adam, start,
-                    test_loader: DataLoader, train_loader: DataLoader) -> object:
+                    test_loader: DataLoader, train_loader: DataLoader) -> Tuple[list, list]:
         num_of_passes = 0
 
         # save best config
@@ -325,16 +324,16 @@ class training(pre_processing):
         self.logger.info(f"Number of Parameters in Network:{self.count_parameters(network)}")
 
         # Load checkpoints if exist
-#         if os.path.exists(checkpoint_file):
-#             print("Loading from Previous Checkpoint...")
-#             self.logger.info("Loading from Previous Checkpoint...")
-#             checkpoint = torch.load(checkpoint_file)
-#             network.load_state_dict(checkpoint['model_state_dict'])
-#             optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-#             network.train()
-#         else:
-#             print("No previous checkpoints exist, initialising network from start...")
-#             self.logger.info("No previous checkpoints exist, initialising network from start...")
+        #         if os.path.exists(checkpoint_file):
+        #             print("Loading from Previous Checkpoint...")
+        #             self.logger.info("Loading from Previous Checkpoint...")
+        #             checkpoint = torch.load(checkpoint_file)
+        #             network.load_state_dict(checkpoint['model_state_dict'])
+        #             optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        #             network.train()
+        #         else:
+        #             print("No previous checkpoints exist, initialising network from start...")
+        #             self.logger.info("No previous checkpoints exist, initialising network from start...")
 
         # Train Model
         train_losses, test_losses = self.train_model(checkpoint_file, loss_criteria, network, optimizer, start,
