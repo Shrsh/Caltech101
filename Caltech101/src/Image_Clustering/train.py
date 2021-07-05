@@ -26,9 +26,11 @@ device = 'cuda' if use_cuda else 'cpu'
 torch.backends.cudnn.benchmark = True
 warnings.filterwarnings("ignore", category=np.VisibleDeprecationWarning)
 
-# logging.basicConfig(filename="training.log",
-#                     format='%(asctime)s %(message)s',
-#                     filemode='w')
+logging.basicConfig(filename="training.log",
+                    format='%(asctime)s %(message)s',
+                    filemode='w')
+logger = logging.getLogger()
+logger.setLevel(logging.DEBUG)
 
 mean: List[float] = [0.5, 0.5, 0.5]
 stdev: List[float] = [0.5, 0.5, 0.5]
@@ -46,7 +48,6 @@ class pre_processing:
     test_dataset_size: int
     classes: dict
     result_directory: str
-    logger: logging
     NUM_OF_CLASSES: int
     LOG_FREQUENCY: int
     NUM_OF_PRINCIPAL_COMPONENTS: int
@@ -63,11 +64,6 @@ class pre_processing:
             # Normalizes tensor with mean and standard deviation
         ])
         self.dataset_size = 0
-        logging.basicConfig(filename=os.path.join(self.result_directory, "training.log"),
-                            format='%(asctime)s %(message)s',
-                            filemode='w')
-        self.logger = logging.getLogger()
-        self.logger.setLevel(logging.DEBUG)
         self.NUM_OF_CLASSES = 101
         self.classes = {}
         self.LOG_FREQUENCY = 5
@@ -120,13 +116,13 @@ class pre_processing:
         for classes in directory_list:
             dir_name = os.path.join(self.data_directory, classes)
             temp_image = self.load_images_from_directory(dir_name)
-            self.logger.info(f"Loading images from directory - {classes}: size - {len(temp_image)}: DONE")
+            logger.info(f"Loading images from directory - {classes}: size - {len(temp_image)}: DONE")
             image_list.extend(temp_image)
             label_list.extend([label for _ in range(len(temp_image))])
             self.classes[classes] = label
             label = label + 1
 
-        self.logger.info(f"Loading image from directory: DONE")
+        logger.info(f"Loading image from directory: DONE")
         image_list = self.create_arrays(image_list)
 
         for input, target in zip(image_list, label_list):
@@ -148,28 +144,30 @@ class training(pre_processing):
     def create_clusters(self, feature_extractor : object, dataloader: DataLoader, image_results_dir: str):
 
         for input, labels in dataloader:
+            if torch.cuda.is_available():
+                input = input.to(device)
             # extracting features from VGG
-            features = feature_extractor.features(input)
+            features = feature_extractor(input)
 
             # Performing PCA analysis
             pca = sklearn.decomposition.PCA(n_components=self.NUM_OF_PRINCIPAL_COMPONENTS)
-            pca.fit(torch.flatten(features, 1))
-            dim_reduced_features = pca.transform(torch.flatten(features, 1))
+            pca.fit(torch.flatten(features, 1).cpu().numpy())
+            dim_reduced_features = pca.transform(torch.flatten(features, 1).cpu().numpy())
 
             # Performing clustering using K-Means Algorithm.
             print(f"Running the elbow method")
             # The lists holds the SSE values and Silhoutte Score for each k
 
-            sse : list = list()
+            sse: list = list()
             silhoutte_score: list = list()
 
-            self.logger.info("Running Elbow method to find the minimum SSE for different values of k")
+            logger.info("Running Elbow method to find the minimum SSE for different values of k")
 
             for k in range(90, self.NUM_OF_CLUSTERS):
                 k_means = sklearn.cluster.KMeans(n_clusters=k)
                 k_means.fit(dim_reduced_features)
-                self.logger.info(f"k = {k} ; SSE Value: {k_means.inertia_}")
-                self.logger.info(f"k = {k} ; Silhoutte Score: {sklearn.metrics.silhouette_score(dim_reduced_features, k_means.labels_)}")
+                logger.info(f"k = {k} ; SSE Value: {k_means.inertia_}")
+                logger.info(f"k = {k} ; Silhoutte Score: {sklearn.metrics.silhouette_score(dim_reduced_features, k_means.labels_)}")
                 print(f"k = {k}; Silhoutte Score: {sklearn.metrics.silhouette_score(dim_reduced_features, k_means.labels_)}")
                 print(f"k = {k}; SSE Value: {k_means.inertia_}")
                 sse.append(k_means.inertia_)
@@ -179,7 +177,7 @@ class training(pre_processing):
             print(f"Minimum Silhoutte Score- {min(silhoutte_score)}; Value of k: {silhoutte_score.index(min(silhoutte_score)) + 90}")
 
             print("Saving Graphs for these metrics in the result directory")
-            self.logger.info(f"Saving Graphs for these metrics in the result directory")
+            logger.info(f"Saving Graphs for these metrics in the result directory")
 
             # Saving plots for Silhouette Coefficient
             plt.style.use("fivethirtyeight")
@@ -200,37 +198,35 @@ class training(pre_processing):
     def image_clusters(self, data_loader: DataLoader):
 
         # Creating directories for results
-        self.logger.info(f"Creating results directory")
+        logger.info(f"Creating results directory")
         if os.path.exists(self.result_directory):
-            shutil.rmtree(self.result_directory)
-            os.mkdir(self.result_directory)
+            shutil.rmtree(self.result_directory, ignore_errors=True)
         else:
             os.mkdir(self.result_directory)
 
-        self.logger.info("Creating Dump directory for keeping track of losses")
+        logger.info("Creating Dump directory for keeping track of losses")
         dump_dir = os.path.join(self.result_directory, f"Dump")
         if os.path.exists(dump_dir):
-            shutil.rmtree(dump_dir)
-            os.mkdir(dump_dir)
+            shutil.rmtree(dump_dir, ignore_errors=True)
         else:
             os.mkdir(dump_dir)
 
-        self.logger.info("Creating directory for keeping plots and images")
+        logger.info("Creating directory for keeping plots and images")
         image_results_dir = os.path.join(self.result_directory, f"images")
         if os.path.exists(image_results_dir):
-            shutil.rmtree(image_results_dir)
-            os.mkdir(image_results_dir)
+            shutil.rmtree(image_results_dir, ignore_errors=True)
         else:
             os.mkdir(image_results_dir)
-        self.logger.info("Directories Created")
+        logger.info("Directories Created")
 
         # Initialising Feature Extractor
-        network = models.vgg19_bn(pretrained=True)
+        network = models.vgg11(pretrained=True).features()
+        network.eval()
         network.to(device)
 
         start = time.time()
         self.create_clusters(network, data_loader, image_results_dir)
-        self.logger.info(f"Completed the Clustering")
+        logger.info(f"Completed the Clustering")
 
 
 if __name__ == '__main__':
