@@ -39,6 +39,7 @@ stdev: List[float] = [0.5, 0.5, 0.5]
 
 class pre_processing:
     """
+
     Data Fetching and pre_processing
     """
     train_transform: Compose
