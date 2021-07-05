@@ -39,10 +39,9 @@ class classification_net(nn.Module):
 
     def forward(self, input_image: torch.Tensor) -> torch.Tensor:
         conv1 = self.conv1(input_image)
-        conv2 = self.dropout(self.conv2(conv1))
+        conv2 = self.conv2(conv1)
         conv3 = self.conv3(conv2)
         conv4 = self.conv4(conv3)
-        conv4 = self.dropout(conv4)
         fc1 = self.fc1(torch.flatten(conv4, 1))
 #         fc2 = self.fc2(fc1)
         fc3 = self.fc3(fc1)

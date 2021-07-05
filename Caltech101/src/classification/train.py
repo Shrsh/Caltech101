@@ -52,11 +52,14 @@ class pre_processing:
     result_directory: str
     logger: logging
     NUM_OF_CLASSES: int
+    LOG_FREQUENCY: int
+    num_epochs: int
+    learning_rate: float
 
     def __init__(self):
         self.data_directory = "/home/harsh.shukla/Caltech101/Data/101_ObjectCategories"
         self.result_directory = "/home/harsh.shukla/Caltech101/results"
-        self.batch_size = 256
+        self.batch_size = 32
         self.test_train_split = 0.1
         self.train_transform = Compose([
             transforms.Resize(256),
@@ -74,6 +77,9 @@ class pre_processing:
         self.logger.setLevel(logging.DEBUG)
         self.NUM_OF_CLASSES = 101
         self.classes = {}
+        self.LOG_FREQUENCY = 5
+        self.num_epochs = 500
+        self.learning_rate = 0.00005
 
     def train_val_dataset(self, dataset):
         train_idx, val_idx = train_test_split(list(range(len(dataset))), test_size=self.test_train_split)
@@ -150,17 +156,9 @@ class pre_processing:
 
 
 class training(pre_processing):
-    num_epochs: int
-    learning_rate: float
-    LOG_FREQUENCY: int
 
     def __init__(self) -> object:
         super(training, self).__init__()
-
-        self.LOG_FREQUENCY = 5
-
-        self.num_epochs = 500
-        self.learning_rate = 0.00005
 
     def count_parameters(self, model: object):
         table = PrettyTable(["Modules", "Parameters"])
@@ -239,8 +237,8 @@ class training(pre_processing):
                     running_corrects_test += (test_labels == test_preds).sum().item()
                     running_loss_test += test_loss.item() * test_input.size(0)
 
-                test_acc = running_corrects_test / float(self.train_dataset_size)
-                test_loss = running_loss_test / float(self.train_dataset_size)
+                test_acc = running_corrects_test / float(self.test_dataset_size)
+                test_loss = running_loss_test / float(self.test_dataset_size)
 
                 test_accuracies.append(test_acc)
                 test_losses.append(test_loss)
@@ -268,17 +266,18 @@ class training(pre_processing):
             for param in model.parameters():
                 param.requires_grad = False
 
-    def initialise_model(self, model_name: str, use_pretrained=True, feature_extract=False) -> object:
+    def initialise_model(self, model_name: str, use_pretrained=True, feature_extract=False):
         model_ft = None
         if model_name == "VGG":
             model_ft = models.vgg19_bn(pretrained=use_pretrained)
-            self.set_parameter_requires_grad(model_ft, feature_extract)
             num_ftrs = model_ft.classifier[6].in_features
             model_ft.classifier[6] = nn.Linear(num_ftrs, self.NUM_OF_CLASSES)
+            parameters_to_optimizer = model_ft.classifier.parameters()
 
         if model_name == "CNet":
             model_ft = Cnet()
-        return model_ft
+            parameters_to_optimizer = model_ft.parameters()
+        return model_ft, parameters_to_optimizer
 
     def train_network(self, train_loader: DataLoader, test_loader: DataLoader):
 
@@ -314,12 +313,12 @@ class training(pre_processing):
 
         # Initialising Network
 
-        network = self.initialise_model("VGG")
+        network, parameters = self.initialise_model("CNet")
         network.to(device)
 
         start = time.time()
 
-        optimizer: Adam = torch.optim.Adam(network.parameters(), lr=self.learning_rate, betas=(0.9, 0.999), eps=1e-8)
+        optimizer: Adam = torch.optim.Adam(parameters, lr=self.learning_rate, betas=(0.9, 0.999), eps=1e-8)
         loss_criteria = nn.CrossEntropyLoss()
 
         self.logger.info(f"Initialised Network, Optimizer and Loss")
