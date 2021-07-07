@@ -15,13 +15,12 @@ from prettytable import PrettyTable
 from torch.nn import init
 from initializer import kaiming_normal_
 
-
 import os
 from PIL import Image
 import numpy as np
 import logging
+import yaml
 import warnings
-
 
 use_cuda = torch.cuda.is_available()
 os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"
@@ -38,6 +37,20 @@ logger.setLevel(logging.DEBUG)
 
 mean: List[float] = [0.5, 0.5, 0.5]
 stdev: List[float] = [0.5, 0.5, 0.5]
+
+# folder to load config file
+CONFIG_PATH = "../"
+
+
+# Function to load yaml configuration file
+def load_config(config_name):
+    with open(os.path.join(CONFIG_PATH, config_name)) as file:
+        config = yaml.safe_load(file)
+
+    return config
+
+
+config = load_config("SuperResolution.yaml")
 
 def weight_init(m):
     '''
@@ -125,12 +138,13 @@ class pre_processing:
     LOG_FREQUENCY: int
     num_epochs: int
     learning_rate: float
+    negative_slope: float
 
     def __init__(self):
-        self.data_directory = "/home/harsh.shukla/Caltech101/Data/SR_Images"
-        self.result_directory = "/home/harsh.shukla/Caltech101/results"
-        self.batch_size = 4
-        self.test_train_split = 0.1
+        self.data_directory = config['dataset']['path']
+        self.result_directory = config['results']['result_dir']
+        self.batch_size = config['training']['batch_size']
+        self.test_train_split = config['training']['test_train_split']
         self.ground_truth_transform = Compose([
             transforms.Resize(256),
             transforms.CenterCrop(224),  # Center crop to 224
@@ -147,12 +161,13 @@ class pre_processing:
         ])
         self.train_dataset_size = 0
         self.test_dataset_size = 0
-        self.NUM_OF_CLASSES = 101
-        self.classes = {}
         self.LOG_FREQUENCY = 500
-        self.num_epochs = 500
-        self.learning_rate = 0.000001
-        self.test_train_split = 0.1
+        self.num_epochs = config['training']['num_of_epochs']
+        self.learning_rate = config['optimizer']['initial_lr']
+
+        # Model Hyperparameters
+        self.negative_slope = config['model']['negative_slope']
+
 
     def train_val_dataset(self, dataset):
         train_idx, val_idx = train_test_split(list(range(len(dataset))), test_size=self.test_train_split)
@@ -287,7 +302,7 @@ class training(pre_processing):
                         bicubic_output = bicubic(test_input)
                         bi_test_loss = loss_criteria(bicubic_output, test_labels)
                         logger.info(f"Bicubic Test Loss: {bi_test_loss}")
-                        logger.info(f"Bicubic PSNR: {10*math.log(4/(bi_test_loss*bi_test_loss))}")
+                        logger.info(f"Bicubic PSNR: {10 * math.log(4 / (bi_test_loss * bi_test_loss))}")
 
                     test_output = network(test_input)
 

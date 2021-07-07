@@ -1,0 +1,31 @@
+dataset:
+  # Path for the extracted Caltech101 Data Directory
+  path: ~\Caltech101\Data\101_ObjectCategories
+  num_of_classes: 101
+  test_train_split: 0.2
+
+test:
+  # Path to the Trained Model Weights for inference
+  script_path: .\classification\pre-trained-model\check.pt
+  batch_size: 128
+
+training:
+  # Parameters for Training the network
+  initial_lr: 0.00005
+  num_of_epochs: 500
+  batch_size: 128
+
+cnet_model:
+  # Hyperparameters for the model
+  negative_slope: 0.2
+  dropout_percentage: 0.3
+
+results:
+  # Central results directory
+  result_dir: ~\Caltech101\
+
+optimizer:
+  # Hyperparameters for optimizer
+  initial_lr: 0.0001
+  beta_1: 0.9
+  beta_2: 0.999

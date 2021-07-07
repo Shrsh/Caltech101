@@ -1,0 +1,25 @@
+dataset:
+  # Path to LR-SR Image Directory
+  path: ~\Caltech101\Data\SR_Images
+  num_of_classes: 101
+  test_train_split: 0.2
+
+training:
+  # Hyperparameter Values for Training
+  batch_size: 4
+  test_train_split: 0.2
+  num_of_epochs: 100
+
+optimizer:
+  # Hyperparameters for optimizer
+  initial_lr: 0.0001
+  beta_1: 0.9
+  beta_2: 0.999
+
+results:
+  # Central results directory
+  result_dir: ~\Caltech101\
+
+model:
+  # Hyper-parameters related to Architecture.
+  negative_slope: 0.2

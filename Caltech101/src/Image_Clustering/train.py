@@ -212,61 +212,109 @@ class training(pre_processing):
         # kmeans = KMeans(n_clusters=101, random_state=0).fit(dim_reduced_features)
         # print(kmeans.labels_[:100])
         print(f"Running the elbow method")
+        k_means = sklearn.cluster.KMeans(n_clusters=101)
+        k_means.fit(dim_reduced_features)
+        print(sklearn.metrics.silhouette_score(dim_reduced_features, k_means.labels_))
         # The lists holds the SSE values and Silhoutte Score for each k
 
         # TODO: T-SNE
 
-        sse: list = list()
-        silhoutte_score: list = list()
+#         sse: list = list()
+#         silhoutte_score: list = list()
 
-        logger.info("Running Elbow method to find the minimum SSE for different values of k")
+#         logger.info("Running Elbow method to find the minimum SSE for different values of k")
 
-        for k in range(95, self.NUM_OF_CLUSTERS):
-            k_means = sklearn.cluster.KMeans(n_clusters=k)
-            k_means.fit(dim_reduced_features)
-            logger.info(f"k = {k} ; SSE Value: {k_means.inertia_}")
-            logger.info(
-                f"k = {k} ; Silhoutte Score: {sklearn.metrics.silhouette_score(dim_reduced_features, k_means.labels_)}")
-            print(
-                f"k = {k}; Silhoutte Score: {sklearn.metrics.silhouette_score(dim_reduced_features, k_means.labels_)}")
-            print(f"k = {k}; SSE Value: {k_means.inertia_}")
-            sse.append(k_means.inertia_)
-            silhoutte_score.append(sklearn.metrics.silhouette_score(dim_reduced_features, k_means.labels_))
+#         for k in range(95, self.NUM_OF_CLUSTERS):
+#             k_means = sklearn.cluster.KMeans(n_clusters=k)
+#             k_means.fit(dim_reduced_features)
+#             logger.info(f"k = {k} ; SSE Value: {k_means.inertia_}")
+#             logger.info(
+#                 f"k = {k} ; Silhoutte Score: {sklearn.metrics.silhouette_score(dim_reduced_features, k_means.labels_)}")
+#             print(
+#                 f"k = {k}; Silhoutte Score: {sklearn.metrics.silhouette_score(dim_reduced_features, k_means.labels_)}")
+#             print(f"k = {k}; SSE Value: {k_means.inertia_}")
+#             sse.append(k_means.inertia_)
+#             silhoutte_score.append(sklearn.metrics.silhouette_score(dim_reduced_features, k_means.labels_))
 
-        print(f"Minimum SSE- {min(sse)}; Value of k: {sse.index(min(sse)) + 90}")
-        print(
-            f"Minimum Silhoutte Score- {min(silhoutte_score)}; Value of k: {silhoutte_score.index(min(silhoutte_score)) + 90}")
+#         print(f"Minimum SSE- {min(sse)}; Value of k: {sse.index(min(sse)) + 90}")
+#         print(
+#             f"Minimum Silhoutte Score- {min(silhoutte_score)}; Value of k: {silhoutte_score.index(min(silhoutte_score)) + 90}")
 
-        print("Saving Graphs for these metrics in the result directory")
-        logger.info(f"Saving Graphs for these metrics in the result directory")
+#         print("Saving Graphs for these metrics in the result directory")
+#         logger.info(f"Saving Graphs for these metrics in the result directory")
 
-        # # Saving plots for Silhouette Coefficient
-        # plt.style.use("fivethirtyeight")
-        # plt.plot(range(95, 102), silhoutte_score)
-        # plt.xticks(range(95, 102))
-        # plt.xlabel("Number of Clusters")
-        # plt.ylabel("Silhouette Coefficient")
-        # plt.savefig(os.path.join(image_results_dir, "Silhouette Coeffecient"))
-        #
-        # # Saving plot for SSE Coefficient
-        # plt.style.use("fivethirtyeight")
-        # plt.plot(range(95, 102), sse)
-        # plt.xticks(range(95, 102))
-        # plt.xlabel("Number of Clusters")
-        # plt.ylabel("SSE")
-        # plt.savefig(os.path.join(image_results_dir, "SSE"))
+#         # Saving plots for Silhouette Coefficient
+#         plt.style.use("fivethirtyeight")
+#         plt.plot(range(95, 102), silhoutte_score)
+#         plt.xticks(range(95, 102))
+#         plt.xlabel("Number of Clusters")
+#         plt.ylabel("Silhouette Coefficient")
+#         plt.savefig(os.path.join(image_results_dir, "Silhouette Coeffecient"))
+
+#         # Saving plot for SSE Coefficient
+#         plt.style.use("fivethirtyeight")
+#         plt.plot(range(95, 102), sse)
+#         plt.xticks(range(95, 102))
+#         plt.xlabel("Number of Clusters")
+#         plt.ylabel("SSE")
+#         plt.savefig(os.path.join(image_results_dir, "SSE"))
+        
+    def initialise_model(self, model_name: str, use_pretrained=True, feature_extract=False):
+        model_ft = None
+        if model_name == "VGG":
+            model_ft = models.vgg19_bn(pretrained=use_pretrained)
+            num_ftrs = model_ft.classifier[6].in_features
+            model_ft.classifier[6] = nn.Linear(num_ftrs, self.NUM_OF_CLASSES)
+            parameters_to_optimizer = model_ft.classifier.parameters()
+
+        if model_name == "CNet":
+            model_ft = Cnet()
+            parameters_to_optimizer = model_ft.parameters()
+        return model_ft, parameters_to_optimizer
 
     def image_clusters(self, data_loader: DataLoader):
 
+        # Creating directories for results
+        logger.info(f"Creating results directory")
+        if os.path.exists(self.result_directory):
+            shutil.rmtree(self.result_directory, ignore_errors=True)
+        os.mkdir(self.result_directory)
+
+        logger.info("Creating Dump directory for keeping track of losses")
+        dump_dir = os.path.join(self.result_directory, f"Dump")
+        if os.path.exists(dump_dir):
+            shutil.rmtree(dump_dir, ignore_errors=True)
+        os.mkdir(dump_dir)
+
+        logger.info("Creating directory for keeping plots and images")
+        image_results_dir = os.path.join(self.result_directory, f"images")
+        if os.path.exists(image_results_dir):
+            shutil.rmtree(image_results_dir, ignore_errors=True)
+        os.mkdir(image_results_dir)
+        logger.info("Directories Created")
+        
+        ##
+        network, parameters = self.initialise_model("VGG")
+        network.to(device)
+        checkpoint_file = '/home/harsh.shukla/Caltech101/src/classification/pre-trained-model/check.pt'
+        
+        checkpoint = torch.load(checkpoint_file)
+        network.load_state_dict(checkpoint['model_state_dict'])
+        modules = list(network.children())[:-1]
+        print(modules)
+        network = nn.Sequential(*modules)
+        network.eval()
+        
+
         # Initialising Feature Extractor
-        model_ft = models.vgg19_bn(pretrained=True)
-        modules = list(model_ft.children())[:-1]
-        model_ft = nn.Sequential(*modules)
-        model_ft.eval()
-        model_ft.to(device)
+#         model_ft = models.vgg19_bn(pretrained=True)
+#         modules = list(model_ft.children())[:-1]
+#         model_ft = nn.Sequential(*modules)
+#         model_ft.eval()
+#         model_ft.to(device)
 
         start = time.time()
-        self.create_clusters(model_ft, data_loader)
+        self.create_clusters(network, data_loader, image_results_dir)
         logger.info(f"Completed the Clustering")
 
 

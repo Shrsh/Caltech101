@@ -61,7 +61,6 @@ class pre_processing:
         self.data_directory = "/home/harsh.shukla/Caltech101/Data/101_ObjectCategories"
         self.result_directory = "/home/harsh.shukla/Caltech101/results"
         self.batch_size = 32
-        self.test_train_split = 0.1
         self.train_transform = Compose([
             transforms.Resize(256),
             transforms.CenterCrop(224),  # Center crop to 224
