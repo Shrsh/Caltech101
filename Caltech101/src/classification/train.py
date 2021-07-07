@@ -26,10 +26,11 @@ device = 'cuda' if use_cuda else 'cpu'
 torch.backends.cudnn.benchmark = True
 warnings.filterwarnings("ignore", category=np.VisibleDeprecationWarning)
 
-# logging.basicConfig(filename="training.log",
-#                     format='%(asctime)s %(message)s',
-#                     filemode='w')
-
+logging.basicConfig(filename=os.path.join("training.log"),
+                            format='%(asctime)s %(message)s',
+                            filemode='w')
+logger = logging.getLogger()
+logger.setLevel(logging.DEBUG)
 
 from models import classification_net as Cnet
 
@@ -70,16 +71,13 @@ class pre_processing:
         ])
         self.train_dataset_size = 0
         self.test_dataset_size = 0
-        logging.basicConfig(filename=os.path.join(self.result_directory, "training.log"),
-                            format='%(asctime)s %(message)s',
-                            filemode='w')
-        self.logger = logging.getLogger()
-        self.logger.setLevel(logging.DEBUG)
+
         self.NUM_OF_CLASSES = 101
         self.classes = {}
         self.LOG_FREQUENCY = 5
         self.num_epochs = 500
         self.learning_rate = 0.00005
+        self.test_train_split = 0.1
 
     def train_val_dataset(self, dataset):
         train_idx, val_idx = train_test_split(list(range(len(dataset))), test_size=self.test_train_split)
@@ -127,13 +125,13 @@ class pre_processing:
         for classes in directory_list:
             dir_name = os.path.join(self.data_directory, classes)
             temp_image = self.load_images_from_directory(dir_name)
-            self.logger.info(f"Loading images from directory - {classes}: size - {len(temp_image)}: DONE")
+            logger.info(f"Loading images from directory - {classes}: size - {len(temp_image)}: DONE")
             image_list.extend(temp_image)
             label_list.extend([label for _ in range(len(temp_image))])
             self.classes[classes] = label
             label = label + 1
 
-        self.logger.info(f"Loading image from directory: DONE")
+        logger.info(f"Loading image from directory: DONE")
         image_list = self.create_arrays(image_list)
 
         for input, target in zip(image_list, label_list):
@@ -142,7 +140,7 @@ class pre_processing:
         train_test_dict: dict = self.train_val_dataset(data)
         self.train_dataset_size = len(train_test_dict['train'])
         self.test_dataset_size = len(train_test_dict['test'])
-        self.logger.info(f"Train-Test Split: DONE")
+        logger.info(f"Train-Test Split: DONE")
         trainloader: DataLoader[Any] = DataLoader(dataset=train_test_dict['train'],
                                                   batch_size=self.batch_size,
                                                   shuffle=True,
@@ -169,8 +167,8 @@ class training(pre_processing):
             param = parameter.numel()
             table.add_row([name, param])
             total_params += param
-        self.logger.info(f"{table}")
-        self.logger.info(f"Total Trainable Params: {total_params}")
+        logger.info(f"{table}")
+        logger.info(f"Total Trainable Params: {total_params}")
 
     def train_model(self, checkpoint_file: object, loss_criteria, network: object, optimizer: Adam, start,
                     test_loader: DataLoader, train_loader: DataLoader) -> Tuple[list, list]:
@@ -203,7 +201,7 @@ class training(pre_processing):
 
                 # Log loss
                 if num_of_passes % self.LOG_FREQUENCY == 0:
-                    self.logger.info('Step {}, Loss {}'.format(num_of_passes, loss.item()))
+                    logger.info('Step {}, Loss {}'.format(num_of_passes, loss.item()))
 
                 loss.backward()
                 optimizer.step()
@@ -243,7 +241,7 @@ class training(pre_processing):
                 test_accuracies.append(test_acc)
                 test_losses.append(test_loss)
 
-                self.logger.info(f"epoch:{epoch} - Test Accuracy: {test_acc:.4f}")
+                logger.info(f"epoch:{epoch} - Test Accuracy: {test_acc:.4f}")
                 print(f"epoch:{epoch} - Overall Test Accuracy: {test_acc}")
 
                 # Check if the current epoch val accuracy is better than the best found until now
@@ -256,8 +254,8 @@ class training(pre_processing):
                     'model_state_dict': network.state_dict(),
                     'optimizer_state_dict': optimizer.state_dict(),
                 }, checkpoint_file)
-        self.logger.info(f"\nBest epoch: {best_epoch + 1}\n{best_val_acc:.4f} (Validation Accuracy)\n")
-        self.logger.info(f"> In {(time.time() - start) / 60:.2f} minutes")
+        logger.info(f"\nBest epoch: {best_epoch + 1}\n{best_val_acc:.4f} (Validation Accuracy)\n")
+        logger.info(f"> In {(time.time() - start) / 60:.2f} minutes")
 
         return train_losses, test_losses
 
@@ -282,21 +280,21 @@ class training(pre_processing):
     def train_network(self, train_loader: DataLoader, test_loader: DataLoader):
 
         # Creating directories for results
-        self.logger.info(f"Creating results directory")
+        logger.info(f"Creating results directory")
         if not os.path.exists(self.result_directory):
             os.makedirs(self.result_directory)
 
-        self.logger.info("Creating Dump directory for keeping track of losses")
+        logger.info("Creating Dump directory for keeping track of losses")
         dump_dir = os.path.join(self.result_directory, f"Dump")
         if not os.path.exists(dump_dir):
             os.makedirs(dump_dir)
 
-        self.logger.info("Creating directory for keeping plots and images")
+        logger.info("Creating directory for keeping plots and images")
         image_results_dir = os.path.join(self.result_directory, f"images")
         if not os.path.exists(image_results_dir):
             os.makedirs(image_results_dir)
 
-        self.logger.info("Check for pre-existing Dump files")
+        logger.info("Check for pre-existing Dump files")
         if os.path.exists((os.path.join(dump_dir, "classification_train_loss.txt"))):
             train_loss_db = open(os.path.join(dump_dir, "classification_train_loss.txt"), 'rb')
             train_loss_dump = pickle.load(train_loss_db)
@@ -309,11 +307,11 @@ class training(pre_processing):
         if not os.path.exists(checkpoints):
             os.makedirs(checkpoints)
         checkpoint_file = os.path.join(checkpoints, "check.pt")
-        self.logger.info("Directories Created")
+        logger.info("Directories Created")
 
         # Initialising Network
 
-        network, parameters = self.initialise_model("CNet")
+        network, parameters = self.initialise_model("VGG")
         network.to(device)
 
         start = time.time()
@@ -321,20 +319,20 @@ class training(pre_processing):
         optimizer: Adam = torch.optim.Adam(parameters, lr=self.learning_rate, betas=(0.9, 0.999), eps=1e-8)
         loss_criteria = nn.CrossEntropyLoss()
 
-        self.logger.info(f"Initialised Network, Optimizer and Loss")
-        self.logger.info(f"Number of Parameters in Network:{self.count_parameters(network)}")
+        logger.info(f"Initialised Network, Optimizer and Loss")
+        logger.info(f"Number of Parameters in Network:{self.count_parameters(network)}")
 
         # Load checkpoints if exist
-        #         if os.path.exists(checkpoint_file):
-        #             print("Loading from Previous Checkpoint...")
-        #             self.logger.info("Loading from Previous Checkpoint...")
-        #             checkpoint = torch.load(checkpoint_file)
-        #             network.load_state_dict(checkpoint['model_state_dict'])
-        #             optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        #             network.train()
-        #         else:
-        #             print("No previous checkpoints exist, initialising network from start...")
-        #             self.logger.info("No previous checkpoints exist, initialising network from start...")
+        if os.path.exists(checkpoint_file):
+            print("Loading from Previous Checkpoint...")
+            logger.info("Loading from Previous Checkpoint...")
+            checkpoint = torch.load(checkpoint_file)
+            network.load_state_dict(checkpoint['model_state_dict'])
+            optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+            network.train()
+        else:
+            print("No previous checkpoints exist, initialising network from start...")
+            logger.info("No previous checkpoints exist, initialising network from start...")
 
         # Train Model
         train_losses, test_losses = self.train_model(checkpoint_file, loss_criteria, network, optimizer, start,
